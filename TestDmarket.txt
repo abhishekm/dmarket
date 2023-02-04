@@ -1,0 +1,27 @@
+const Order = artifacts.require("./Order");
+
+contract('Order', (accounts) => {
+  it('should show 0 account balance', async () => {
+    //let accounts = await web3.eth.getAccounts();
+    const orderInstance = await Order.deployed();
+    
+    
+    const balance = await orderInstance.getBalance();
+  
+    assert.equal(balance.valueOf(), 0, "0 account balance initially");
+  });
+
+   it('should add and retrieve product', async () => {
+    const orderInstance = await Order.deployed();
+    await orderInstance.addProduct(1, "IPhone", 12,"Iphone desc", "New Iphone", "5");
+    const product = await orderInstance.getProduct();
+    assert.equal(product.prodId, 1);
+    assert.equal(product.prodName, "IPhone");
+    assert.equal(product.prodPrice, 12);
+    assert.equal(product.prodDesc,"Iphone desc");
+    assert.equal(product.prodSpec, "New Iphone");
+    assert.equal(product.rating, "5");
+    assert.equal(product.status, 0);
+    assert.equal(product.sellerId, accounts[0]);
+  });
+});

@@ -1,0 +1,162 @@
+const Order = artifacts.require("./Order");
+const DMarket = artifacts.require("./DMarket");
+// let orderAddress = "";
+
+contract('DMarket', (accounts) => {
+  it('Dmarket contract will not create orders', async () => {
+    //let accounts = await web3.eth.getAccounts();
+    let orders  = [];
+    const dmarketInstance = await DMarket.deployed();
+   // await dmarketInstance.createOrder();
+    orders = await dmarketInstance.getOrders();
+    //console.log("Orders list here: "+orders)
+    assert.equal(orders.length, 0, "no orders generated");
+  });
+
+  it('Dmarket contract should generate Order contracts', async () => {
+    //let accounts = await web3.eth.getAccounts();
+    const dmarketInstance = await DMarket.deployed();
+    await dmarketInstance.createOrder();
+    await dmarketInstance.createOrder();
+    const orders = await dmarketInstance.getOrders();
+    assert.equal(orders.length, 2, "2 orders generated");
+    // orderAddress = orders[0];
+
+    // console.log("buyer Address: "+orderAddress)
+  });  
+});
+
+
+module.exports = function (deployer) {
+  // deployer.deploy(Order,userAddress);
+  deployer.deploy(Order, orderAddress);
+};
+
+
+contract('Order', (accounts) => {
+  it('contract should show 0 account balance in contract initially', async () => {
+    //let accounts = await web3.eth.getAccounts();
+    const orderInstance = await Order.deployed();
+    //console.log("Accounts : " +accounts[0]);
+    //console.log("order "+orderInstance);
+
+    const balance = await orderInstance.getBalance();
+    //console.log(await orderInstance.getBalance.call());
+    // console.log("balnce "+balance.valueOf());
+    assert.equal(balance.valueOf(), 0, "0 account balance initially");
+  });
+
+  it('should add and retrieve product', async () => {
+    const orderInstance = await Order.deployed();
+    await orderInstance.addProduct(1, "IPhone", 12, "Iphone desc", "New Iphone", "5", {from: accounts[2]});
+    const product = await orderInstance.getProduct();
+    assert.equal(product.prodId, 1);
+    assert.equal(product.prodName, "IPhone");
+    assert.equal(product.prodPrice, 12);
+    assert.equal(product.prodDesc, "Iphone desc");
+    assert.equal(product.prodSpec, "New Iphone");
+    assert.equal(product.rating, "5");
+    assert.equal(product.status, 0);
+    //assert.equal(product.sellerId, accounts[0]);
+    assert.equal(product.sellerId, accounts[2]);
+  });
+
+  it('buyer should send ether to contract', async () => {
+    const orderInstance = await Order.deployed();
+    const product = await orderInstance.getProduct();
+    assert.equal(0, product.status);
+    try {
+      //not sending ether
+      await orderInstance.buyProduct();
+    } catch (error) {
+      assert.notEqual(error, undefined, 'Error must be thrown');
+      assert.isAbove(error.message.search('VM Exception while processing transaction: revert'), -1, 'Error: VM Exception while processing transaction: revert');
+    }
+  });
+
+  it('buyer should not pay 0 ether', async () => {
+    const orderInstance = await Order.deployed();
+    const sendValue = 0;
+    const product = await orderInstance.getProduct();
+    assert.equal(0, product.status);
+    try {
+      // sending 0 ether
+      await orderInstance.buyProduct({ value: sendValue });
+    } catch (error) {
+      assert.notEqual(error, undefined, 'Error must be thrown');
+      assert.isAbove(error.message.search('VM Exception while processing transaction: revert'), -1, 'Error: VM Exception while processing transaction: revert');
+    }
+  });
+
+
+  it('buyer should pay to contract from another account', async () => {
+    const orderInstance = await Order.deployed();
+    const sendValue = 12;
+    await orderInstance.buyProduct({ value: sendValue, from: accounts[1]  });
+    // check on balance in contract after buying
+    const contractBalance = await orderInstance.getBalance();
+    assert.equal(sendValue, contractBalance);
+  });
+
+
+  it('buyer should pay equal to price of product', async () => {
+    const orderInstance = await Order.deployed();
+    const sendValue = 12;
+    const product = await orderInstance.getProduct();
+    assert.equal(0, product.status);
+    await orderInstance.buyProduct({ value: sendValue, from: accounts[1] });
+    assert.equal(sendValue, product.prodPrice);
+  });
+
+
+  it('catch error if buyer pays more than price of product', async () => {
+    const orderInstance = await Order.deployed();
+    // ether exceeds the product price
+    const sendValue = 20;
+    // const product = await orderInstance.getProduct();
+    // assert.equal(0, product.status);
+    try {
+      await orderInstance.buyProduct({ value: sendValue, from: accounts[1] });
+    } catch (error) {
+      assert.notEqual(error, undefined, 'Error must be thrown');
+      assert.isAbove(error.message.search('VM Exception while processing transaction: revert'), -1, 'Error: VM Exception while processing transaction: revert');
+    }
+  });
+
+  it('seller should ship the product', async () => {
+    const orderInstance = await Order.deployed();
+    await orderInstance.sellerShipped({from: accounts[2]});
+    const product = await orderInstance.getProductBought();
+    // assert.equal(product.status, ProductStatus.Shipped);
+    assert.notEqual(product.status, 0);
+    assert.equal(product.status, 1);
+  });
+
+  it('verify payment to seller', async () => {
+    const orderInstance = await Order.deployed();
+    const sellerBalanceBeforePay = await orderInstance.getSellerBalance(accounts[2]);
+    console.log("Seller amount before pay: "+sellerBalanceBeforePay);
+    await orderInstance.productDelivered({from: accounts[1]});
+    const sellerBalanceAfterPay = await orderInstance.getSellerBalance(accounts[2]);
+    console.log("Seller amount after pay: "+sellerBalanceAfterPay);
+
+    const product = await orderInstance.getProductBought();
+    // assert.equal(product.status, ProductStatus.Shipped);
+    assert.notEqual(product.status, 0);
+    assert.equal(product.status, 1);
+  });
+
+
+
+  it('buyer confirms delivery', async () => {
+    const orderInstance = await Order.deployed();
+    await orderInstance.productDelivered({from: accounts[1]});
+    const product = await orderInstance.getProductBought();
+
+    assert.notEqual(product.status, 0);
+    assert.notEqual(product.status, 1);
+    assert.equal(product.status, 2);
+  });
+  
+
+});
